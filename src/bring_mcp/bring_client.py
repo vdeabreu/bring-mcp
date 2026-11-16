@@ -6,11 +6,13 @@ pyproject.toml for that reason; the tests cover these helpers.
 """
 
 import asyncio
+import json
 import os
 import re
 import unicodedata
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from importlib import resources
 from typing import TypeVar
 
 import aiohttp
@@ -34,6 +36,7 @@ class BringClient:
         self.password = password
         self.default_list = default_list or None
         self._bring: Bring | None = None
+        self._session: aiohttp.ClientSession | None = None
         self._catalogs: dict[str, dict[str, str]] = {}
         self._lock = asyncio.Lock()
 
@@ -54,20 +57,24 @@ class BringClient:
                 except BaseException:
                     await session.close()
                     raise
-                self._bring = bring
+                self._bring, self._session = bring, session
             return self._bring
 
     async def close(self) -> None:
         async with self._lock:
-            if self._bring is not None:
-                await self._bring._session.close()
-                self._bring = None
-                self._catalogs.clear()
+            if self._session is not None:
+                await self._session.close()
+            self._bring = self._session = None
+            self._catalogs.clear()
 
     async def _call(self, op: Callable[[Bring], Awaitable[T]]) -> T:
-        """Run `op`; if Bring rejects the session (refresh token expired), log in again once."""
+        """Run `op`; if Bring rejects an existing session (refresh token expired), log in again once.
+
+        A failed *login* is not retried: wrong credentials would otherwise double the login
+        attempts on every tool call, which could get the Bring account rate-limited."""
+        bring = await self.bring()
         try:
-            return await op(await self.bring())
+            return await op(bring)
         except BringAuthException:
             await self.close()
             return await op(await self.bring())
@@ -124,9 +131,11 @@ class BringClient:
             translations: dict[str, dict[str, str]] = bring._Bring__translations
             if locale in translations:
                 names = translations[locale].values()
+            elif locale == BRING_DEFAULT_LOCALE:
+                # Bring's catalog keys are Swiss German, so bring-api loads no table for de-CH lists.
+                names = _bundled_catalog_keys()
             else:
-                # Bring's catalog keys are Swiss German, so a de-CH list has no translation table.
-                names = next(iter(translations.values()), {}).keys() if locale == BRING_DEFAULT_LOCALE else []
+                names = []
             self._catalogs[locale] = {normalize(v): v for v in names}
         return self._catalogs[locale].get(normalize(name), name.strip())
 
@@ -137,6 +146,15 @@ class BringClient:
             return bring._Bring__translate(item_id, to_locale=bring._Bring__locale(list_uuid))
         except Exception:
             return item_id
+
+
+def _bundled_catalog_keys() -> list[str]:
+    """Catalog item ids, from the translation table bring-api ships for de-CH."""
+    path = resources.files("bring_api") / "locales" / f"articles.{BRING_DEFAULT_LOCALE}.json"
+    try:
+        return list(json.loads(path.read_text(encoding="utf-8")))
+    except (OSError, ValueError):
+        return []
 
 
 def normalize(name: str) -> str:

@@ -39,7 +39,9 @@ The container runs as uid 1000; if your user has another uid, `chown 1000 data`.
 
 Inside the container the server listens on all interfaces of its own Docker
 network (`ALLOW_NON_LOOPBACK_LISTEN=true` in `compose.yml`); on the host, the port
-is only published on 127.0.0.1. Don't change the `ports:` line to `8765:8765`:
+is only published on 127.0.0.1. Logged client addresses come from the proxy's
+`X-Forwarded-For`, trusted only from Docker's default address pool
+(`FORWARDED_ALLOW_IPS`); if your Docker uses another pool, set it to that range. Don't change the `ports:` line to `8765:8765`:
 Docker publishes ports past host firewalls such as ufw.
 
 ## 3. Reverse proxy + certificate

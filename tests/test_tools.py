@@ -9,7 +9,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
 from bring_mcp import tools
-from bring_mcp.bring_client import BringClient, Item
+from bring_mcp.bring_client import BringClient, Item, normalize
 from bring_mcp.staples import set_staples
 from bring_mcp.store import Store
 
@@ -34,8 +34,6 @@ class FakeClient(BringClient):
             self.applied.append((changes, operation))
 
     async def catalog_name(self, list_uuid, name):
-        from bring_mcp.bring_client import normalize
-
         return CATALOG.get(normalize(name), name.strip())
 
 
@@ -132,11 +130,30 @@ def test_recipe_url_must_be_http(env, url):
 
 
 def test_annotations(env):
-    _, _, _ = env
+    client, store, _ = env
     mcp = MCPServer("t")
-    tools.register(mcp, FakeClient(), Store.__new__(Store))
+    tools.register(mcp, client, store)
     by_name = {t.name: t.annotations for t in asyncio.run(mcp.list_tools())}
     assert by_name["get_list"].read_only_hint is True
     assert by_name["remove_items"].destructive_hint is True
     assert by_name["set_staples_list"].destructive_hint is True
     assert by_name["add_items"].read_only_hint is False
+
+
+def test_unexpected_errors_dont_leak_details(env, caplog):
+    client, _, call = env
+
+    async def broken(list_uuid):
+        raise KeyError("internal-detail")
+
+    client.items = broken
+    with caplog.at_level("ERROR", logger="bring-mcp.audit"), pytest.raises(ToolError) as exc:
+        call("get_list")
+    assert "internal-detail" not in str(exc.value) and "server logs" in str(exc.value)
+    assert "internal-detail" in caplog.text  # but the operator can see it
+
+
+def test_store_is_private(tmp_path):
+    Store(tmp_path / "sub" / "db.sqlite")
+    assert (tmp_path / "sub").stat().st_mode & 0o777 == 0o700
+    assert (tmp_path / "sub" / "db.sqlite").stat().st_mode & 0o777 == 0o600

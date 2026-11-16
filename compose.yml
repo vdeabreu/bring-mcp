@@ -8,9 +8,10 @@ services:
       # the port is only published on the host's loopback, for the reverse proxy.
       LISTEN_HOST: 0.0.0.0
       ALLOW_NON_LOOPBACK_LISTEN: "true"
-      # Requests arrive from the Docker gateway, not 127.0.0.1: trust X-Forwarded-For
-      # (only used for log lines; nothing else can reach the loopback-published port).
-      FORWARDED_ALLOW_IPS: "*"
+      # Requests arrive from the Docker gateway (172.16.0.0/12 is Docker's default
+      # pool), not 127.0.0.1. Never use "*": uvicorn would then take the leftmost
+      # X-Forwarded-For value, which any client can set, and log a forged address.
+      FORWARDED_ALLOW_IPS: 172.16.0.0/12
     ports:
       - 127.0.0.1:8765:8765
     volumes:

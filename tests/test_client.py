@@ -86,11 +86,33 @@ def test_catalog_name_for_swiss_german_list_uses_catalog_keys():
     assert asyncio.run(client.catalog_name("u1", "eier")) == "Eier"
 
 
+def test_catalog_for_swiss_german_list_without_any_table():
+    fake = FakeBring(locale="de-CH")
+    fake._Bring__translations = {}  # account with de-CH lists only: bring-api loads nothing
+    client = _client_with(fake)
+    assert asyncio.run(client.catalog_name("u1", "tomaten")) == "Tomaten"
+
+
 def test_relogin_once_when_session_expired():
     first, second = FakeBring(fail_once=True), FakeBring()
     client = _client_with(first, second)
     assert asyncio.run(client.lists()) == [{"name": "Courses", "uuid": "u1"}]
     assert first.calls == 1 and second.calls == 1
+
+
+def test_failed_login_is_not_retried():
+    client = BringClient("me@example.com", "wrong", None)
+    attempts = 0
+
+    async def bring():
+        nonlocal attempts
+        attempts += 1
+        raise BringAuthException("bad credentials")
+
+    client.bring = bring
+    with pytest.raises(BringAuthException):
+        asyncio.run(client.lists())
+    assert attempts == 1
 
 
 def test_from_env_requires_credentials(monkeypatch):

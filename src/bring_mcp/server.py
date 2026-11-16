@@ -8,6 +8,7 @@ Same tools as the local stdio server (tools.py). Differences:
 import ipaddress
 import logging
 import os
+from urllib.parse import urlsplit
 
 import uvicorn
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions, RevocationOptions
@@ -35,9 +36,18 @@ def _env_true(name: str, default: str = "") -> bool:
     return os.environ.get(name, default).strip().lower() in ("1", "true", "yes")
 
 
-if not os.environ.get("PUBLIC_URL"):
-    raise SystemExit("PUBLIC_URL must be set (public https URL of the server, e.g. https://bring.example.com)")
-PUBLIC_URL = os.environ["PUBLIC_URL"].rstrip("/")
+def _public_url(value: str) -> str:
+    """Base URL clients see: https, a host, no path (OAuth metadata and the Host check derive from it)."""
+    url = urlsplit(value.strip().rstrip("/"))
+    local = url.hostname in ("localhost", "127.0.0.1")
+    if not url.hostname or url.path or url.query or (url.scheme != "https" and not (local and url.scheme == "http")):
+        raise SystemExit(
+            f"PUBLIC_URL={value!r} must be the server's public https URL without path, e.g. https://bring.example.com"
+        )
+    return f"{url.scheme}://{url.netloc}"
+
+
+PUBLIC_URL = _public_url(os.environ.get("PUBLIC_URL", ""))
 LISTEN_HOST = os.environ.get("LISTEN_HOST", "127.0.0.1")
 PORT = int(os.environ.get("PORT", "8765"))
 FORWARDED_ALLOW_IPS = os.environ.get("FORWARDED_ALLOW_IPS", "127.0.0.1")
@@ -96,7 +106,7 @@ async def health(request: Request):
 
 
 def main() -> None:
-    public_host = PUBLIC_URL.split("://", 1)[1]
+    public_host = urlsplit(PUBLIC_URL).netloc
     app = mcp.streamable_http_app(
         host=LISTEN_HOST,
         transport_security=TransportSecuritySettings(

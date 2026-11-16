@@ -49,9 +49,14 @@ its private attributes. `server.py` reads its configuration at import time, so
   (the server never downloads the page itself), accepts `http(s)` only and returns
   only ingredient names and specs. `INSTRUCTIONS` tell the model not to follow text
   from recipe pages; keep it that way.
-- **Errors are readable.** Bring and lookup errors (`BringException`, `ValueError`)
-  become a `ToolError` with a short message the model can act on (e.g. the list of
-  available lists).
+- **Errors are readable, internals aren't.** Bring and lookup errors
+  (`BringException`, `ValueError`) become a `ToolError` with a short message the
+  model can act on (e.g. the list of available lists). Any other exception is logged
+  with its traceback and reported as a generic message.
+- **Shared lists are untrusted too.** Item names come from everyone the list is
+  shared with; `INSTRUCTIONS` tell the model to treat them as data.
+- **Private data directory.** `Store` creates the directory 0700 and the SQLite
+  file 0600: it holds OAuth tokens.
 - **Remote hardening.** The HTTP server refuses a non-loopback `LISTEN_HOST` unless
   `ALLOW_NON_LOOPBACK_LISTEN=true` (`_check_listen_host`); `MCP_PASSWORD` must be
   20+ characters; OAuth registration only accepts the claude.ai callback URLs; the
@@ -83,10 +88,13 @@ its private attributes. `server.py` reads its configuration at import time, so
 - **Sessions.** Login is lazy (first tool call), so the server starts without
   network. bring-api refreshes the access token by itself; when the refresh token
   expires it raises `BringAuthException`, and `BringClient._call()` logs in again
-  once. List settings (locales) are loaded at login: a list created later uses the
+  once. A failed login itself is never retried (wrong credentials would double the
+  attempts on every call and risk a rate limit on the Bring account). List settings (locales) are loaded at login: a list created later uses the
   account locale until the next login.
 - **Accounts** must sign in with email and password; Google/Apple sign-in accounts
   need a password set in the Bring app first.
+- **de-CH only accounts.** bring-api loads no translation table for de-CH, so the
+  catalog comes from the `articles.de-CH.json` file bring-api ships.
 
 ## MCP SDK notes (mcp 2.3.0)
 
@@ -104,8 +112,10 @@ its private attributes. `server.py` reads its configuration at import time, so
   network: it only talks to the internet, and the host network would let it reach
   other loopback services (such as Proton Mail Bridge on the same host). So in
   `compose.yml` it listens on 0.0.0.0 inside the container, the port is published
-  on `127.0.0.1` only, and `FORWARDED_ALLOW_IPS="*"` because requests come from the
-  Docker gateway (the forwarded IP is only used in log lines).
+  on `127.0.0.1` only, and `FORWARDED_ALLOW_IPS` trusts Docker's default pool
+  (172.16.0.0/12) because requests come from the Docker gateway. Never `"*"`: uvicorn
+  then takes the *leftmost* `X-Forwarded-For` value, which the client controls, so
+  anyone could forge the address in "wrong password from ..." log lines.
 - The reverse proxy should target `127.0.0.1:8765`, not `localhost` (Docker
   doesn't publish the port on `::1`).
 - Rebuilding the container keeps OAuth tokens (`data/bring-mcp.sqlite`), so

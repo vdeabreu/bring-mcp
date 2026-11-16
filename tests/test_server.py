@@ -45,7 +45,43 @@ def test_short_password_refused(tmp_path):
     assert "at least 20 characters" in r.stderr
 
 
-def test_missing_public_url(tmp_path):
-    r = _import_server(tmp_path, PUBLIC_URL="")
+import pytest  # noqa: E402
+
+
+@pytest.mark.parametrize(
+    "url", ["", "bring.example.com", "http://bring.example.com", "https://bring.example.com/mcp", "https://"]
+)
+def test_bad_public_url_refused(tmp_path, url):
+    r = _import_server(tmp_path, PUBLIC_URL=url)
     assert r.returncode != 0
-    assert "PUBLIC_URL must be set" in r.stderr
+    assert "must be the server's public https URL" in r.stderr
+
+
+def test_public_url_trailing_slash_and_local_http_accepted(tmp_path):
+    assert _import_server(tmp_path, PUBLIC_URL="https://bring.example.com/").returncode == 0
+    assert _import_server(tmp_path, PUBLIC_URL="http://localhost:8765").returncode == 0
+
+
+def _client_seen_by_app(trusted: str, forwarded_for: str) -> str:
+    import asyncio
+
+    from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+
+    seen = {}
+
+    async def app(scope, receive, send):
+        seen["client"] = scope["client"][0]
+
+    scope = {
+        "type": "http", "scheme": "http", "client": ("172.20.0.1", 40000),  # the Docker gateway
+        "headers": [(b"x-forwarded-for", forwarded_for.encode())],
+    }
+    asyncio.run(ProxyHeadersMiddleware(app, trusted_hosts=trusted)(scope, None, None))
+    return seen["client"]
+
+
+def test_forwarded_ip_trust_from_compose_cannot_be_spoofed():
+    """With the compose setting, the logged address is the one the proxy saw, not one the client sent."""
+    # Apache appends the real client address to whatever X-Forwarded-For the client sent.
+    assert _client_seen_by_app("172.16.0.0/12", "6.6.6.6, 203.0.113.7") == "203.0.113.7"
+    assert _client_seen_by_app("*", "6.6.6.6, 203.0.113.7") == "6.6.6.6"  # why compose doesn't use "*"
