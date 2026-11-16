@@ -1,0 +1,30 @@
+services:
+  bring-mcp:
+    build: .
+    container_name: bring-mcp
+    env_file: .env
+    environment:
+      # Inside its own container network the server has to listen on all interfaces;
+      # the port is only published on the host's loopback, for the reverse proxy.
+      LISTEN_HOST: 0.0.0.0
+      ALLOW_NON_LOOPBACK_LISTEN: "true"
+      # Requests arrive from the Docker gateway, not 127.0.0.1: trust X-Forwarded-For
+      # (only used for log lines; nothing else can reach the loopback-published port).
+      FORWARDED_ALLOW_IPS: "*"
+    ports:
+      - 127.0.0.1:8765:8765
+    volumes:
+      - ./data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
