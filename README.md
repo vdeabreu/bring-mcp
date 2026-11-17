@@ -3,6 +3,7 @@
 [![PyPI](https://img.shields.io/pypi/v/bring-mcp)](https://pypi.org/project/bring-mcp/)
 [![CI](https://github.com/vdeabreu/bring-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/vdeabreu/bring-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/vdeabreu/bring-mcp/blob/main/LICENSE)
+[![Glama score](https://glama.ai/mcp/servers/vdeabreu/bring-mcp/badges/score.svg)](https://glama.ai/mcp/servers/vdeabreu/bring-mcp)
 
 <!-- mcp-name: io.github.vdeabreu/bring-mcp -->
 
