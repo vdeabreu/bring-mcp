@@ -23,6 +23,10 @@ client) access to your **[Bring!](https://www.getbring.com)** shopping lists.
 > [bring-api](https://github.com/miaucl/bring-api), an unofficial client of the
 > Bring! API, which may change without notice.
 
+![bring-mcp demo: adding a recipe's ingredients to a Bring! list, skipping pantry items and merging quantities](https://raw.githubusercontent.com/vdeabreu/bring-mcp/main/docs/demo.gif)
+
+<sub>Illustration with sample data, in a generic chat client. The tool names and the flow are the server's own.</sub>
+
 ## Why this one
 
 Other Bring! MCP servers map the API call by call (load list, save item, remove
