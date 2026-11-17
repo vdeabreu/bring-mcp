@@ -34,6 +34,15 @@ against a `FakeClient`, `tests/test_client.py` fakes `bring_api.Bring` including
 its private attributes. `server.py` reads its configuration at import time, so
 `tests/test_server.py` imports it in a subprocess.
 
+## Releasing
+
+Bump `version` in `pyproject.toml`, commit, then push a tag `vX.Y.Z` with the same
+version. `.github/workflows/release.yml` checks the tag matches, runs the tests,
+publishes to PyPI (trusted publishing, environment `pypi`), then publishes
+`server.json` to the MCP Registry as `io.github.vdeabreu/bring-mcp` (GitHub OIDC). The
+registry checks ownership through the `mcp-name:` comment at the top of the
+README: keep it.
+
 ## Invariants: don't break these
 
 - **Bounded, single-line inputs.** Item names, specs and list names go through the

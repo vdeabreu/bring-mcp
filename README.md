@@ -1,5 +1,11 @@
 # bring-mcp
 
+[![PyPI](https://img.shields.io/pypi/v/bring-mcp)](https://pypi.org/project/bring-mcp/)
+[![CI](https://github.com/vdeabreu/bring-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/vdeabreu/bring-mcp/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/vdeabreu/bring-mcp/blob/main/LICENSE)
+
+<!-- mcp-name: io.github.vdeabreu/bring-mcp -->
+
 An [MCP](https://modelcontextprotocol.io) server that gives Claude (or any MCP
 client) access to your **[Bring!](https://www.getbring.com)** shopping lists.
 
@@ -15,6 +21,23 @@ client) access to your **[Bring!](https://www.getbring.com)** shopping lists.
 > Unofficial project, not affiliated with or endorsed by Bring! Labs AG. It uses
 > [bring-api](https://github.com/miaucl/bring-api), an unofficial client of the
 > Bring! API, which may change without notice.
+
+## Why this one
+
+Other Bring! MCP servers map the API call by call (load list, save item, remove
+item...). This one gives the model tools shaped like the tasks you ask for:
+
+- **"Add what I need for this recipe"**: Bring's own recipe parser extracts the
+  ingredients of a page in your list's language, and flags pantry items (salt,
+  oil) so the model can ask before adding them.
+- **"Add 2 more litres of milk"**: an item already on the list gets its quantity
+  merged instead of replaced, and names are matched against the Bring catalog
+  (case, accents, simple plurals), so items land in the right section with their icon.
+- **Weekly staples**: keep the list of things you always buy and add the missing
+  ones in one call, or from cron without any LLM.
+- **Works in claude.ai on the web and on your phone**, not only in Claude Desktop:
+  a remote mode with OAuth, Docker and reverse-proxy configs, and a full
+  [deployment guide](https://github.com/vdeabreu/bring-mcp/blob/main/docs/deploy.md).
 
 ## Tools
 
@@ -37,14 +60,9 @@ Prompts: `add_recipe`, `clean_up_list`, `weekly_shopping`.
 
 ## Local setup (Claude Desktop)
 
-Requirements: Python 3.12+ and a Bring! account that signs in with an email and
-password (if you use Google or Apple sign-in, set a password in the Bring app).
-
-```bash
-git clone https://github.com/vdeabreu/bring-mcp && cd bring-mcp
-python -m venv .venv
-.venv/bin/pip install -e .          # Windows: .venv\Scripts\pip install -e .
-```
+Requirements: [uv](https://docs.astral.sh/uv/) (or Python 3.12+) and a Bring!
+account that signs in with an email and password (if you use Google or Apple
+sign-in, set a password in the Bring app).
 
 Add the server to `claude_desktop_config.json`. Open it from Claude Desktop →
 Settings → Developer → Edit Config, or directly:
@@ -57,7 +75,8 @@ Settings → Developer → Edit Config, or directly:
 {
   "mcpServers": {
     "bring": {
-      "command": "/path/to/bring-mcp/.venv/bin/bring-mcp",
+      "command": "uvx",
+      "args": ["bring-mcp"],
       "env": {
         "BRING_EMAIL": "you@example.com",
         "BRING_PASSWORD": "your-bring-password",
@@ -68,8 +87,10 @@ Settings → Developer → Edit Config, or directly:
 }
 ```
 
-On Windows, use `C:\\path\\to\\bring-mcp\\.venv\\Scripts\\bring-mcp.exe`. Fully
-quit and restart Claude Desktop after editing the file.
+Fully quit and restart Claude Desktop after editing the file.
+
+Without uv: `pip install bring-mcp`, then use `"command": "bring-mcp"` (the full
+path to that script if it isn't on your `PATH`) and no `args`.
 
 ### Configuration
 
@@ -89,7 +110,7 @@ streamable HTTP, behind a single-user OAuth password page, for claude.ai on the
 web and mobile. A Dockerfile and compose file are included, plus Apache and Caddy
 configs that only let Anthropic's IP ranges reach `/mcp`.
 
-See **[docs/deploy.md](docs/deploy.md)** for the full guide (Docker, reverse
+See **[docs/deploy.md](https://github.com/vdeabreu/bring-mcp/blob/main/docs/deploy.md)** for the full guide (Docker, reverse
 proxy, claude.ai, weekly staples).
 
 ## Security
@@ -121,7 +142,7 @@ proxy, claude.ai, weekly staples).
     account gets access. Only type it right after clicking *Connect* yourself.
 
 Keep `.env` and `claude_desktop_config.json` private. To report a vulnerability,
-see [SECURITY.md](SECURITY.md).
+see [SECURITY.md](https://github.com/vdeabreu/bring-mcp/blob/main/SECURITY.md).
 
 ## Limitations
 
@@ -134,6 +155,7 @@ see [SECURITY.md](SECURITY.md).
 ## Development
 
 ```bash
+git clone https://github.com/vdeabreu/bring-mcp && cd bring-mcp
 pip install -e ".[dev]"
 pytest
 ruff check .
@@ -146,4 +168,4 @@ security headers, startup checks).
 
 ## License
 
-[MIT](LICENSE)
+[MIT](https://github.com/vdeabreu/bring-mcp/blob/main/LICENSE)

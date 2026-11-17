@@ -4,7 +4,16 @@ version = "0.1.0"
 description = "MCP server for Bring! shopping lists (local stdio or remote claude.ai connector)"
 readme = "README.md"
 license = "MIT"
+authors = [{ name = "Victor De Abreu" }]
 requires-python = ">=3.12"
+keywords = ["mcp", "mcp-server", "bring", "shopping-list", "groceries", "recipes", "claude"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Home Automation",
+]
 dependencies = [
     "mcp==2.3.0",
     # Pinned: bring_client.py uses a few private attributes of bring-api.
@@ -14,6 +23,10 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.6"]
+
+[project.urls]
+Homepage = "https://github.com/vdeabreu/bring-mcp"
+Issues = "https://github.com/vdeabreu/bring-mcp/issues"
 
 [project.scripts]
 bring-mcp = "bring_mcp.__main__:main"

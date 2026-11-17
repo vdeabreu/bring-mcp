@@ -1,0 +1,39 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.vdeabreu/bring-mcp",
+  "title": "Bring! shopping list",
+  "description": "Manage Bring! shopping lists: add items with quantities, recipe ingredients and weekly staples.",
+  "repository": {
+    "url": "https://github.com/vdeabreu/bring-mcp",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "bring-mcp",
+      "version": "0.1.0",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "BRING_EMAIL",
+          "description": "Bring! account email",
+          "isRequired": true
+        },
+        {
+          "name": "BRING_PASSWORD",
+          "description": "Bring! account password",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "BRING_DEFAULT_LIST",
+          "description": "List used when a tool gets no list name (default: your first list)"
+        }
+      ]
+    }
+  ]
+}
