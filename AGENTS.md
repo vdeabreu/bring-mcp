@@ -19,6 +19,8 @@ when changing it.
 - `src/bring_mcp/store.py`: SQLite key-value store (OAuth clients/tokens, staples).
   `src/bring_mcp/staples.py`: staples, and the cron command `python -m bring_mcp.staples`.
 - `deploy/`: example reverse-proxy configs. `docs/deploy.md`: the full server guide.
+- `server.json`: the MCP Registry entry. `.github/workflows/release.yml`: publishing.
+  The PyPI package holds all of `src/bring_mcp`, with its three commands.
 
 ## Commands
 
@@ -42,6 +44,16 @@ publishes to PyPI (trusted publishing, environment `pypi`), then publishes
 `server.json` to the MCP Registry as `io.github.vdeabreu/bring-mcp` (GitHub OIDC). The
 registry checks ownership through the `mcp-name:` comment at the top of the
 README: keep it.
+
+- A version published on PyPI is permanent: never move or reuse a tag. If the
+  registry step fails after PyPI succeeded, re-run that job, don't re-tag.
+- The workflow writes the tag's version into `server.json`; the version committed
+  there doesn't need bumping.
+- The README is also the PyPI page: use absolute GitHub URLs for links to repo
+  files, relative ones break on PyPI.
+- A new environment variable goes in the README configuration table,
+  `.env.example`, and `server.json` (`environmentVariables`, `isSecret` for
+  credentials).
 
 ## Invariants: don't break these
 
