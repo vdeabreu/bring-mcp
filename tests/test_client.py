@@ -38,7 +38,10 @@ class FakeBring:
     """Stands in for bring_api.Bring, including the private attributes the client reads."""
 
     def __init__(self, locale="fr-FR", fail_once=False):
-        self._Bring__translations = {"fr-FR": {"Eier": "Oeufs", "Tomaten": "Tomates"}}
+        self._Bring__translations = {"fr-FR": {"Eier": "Oeufs", "Tomaten": "Tomates", "Milch": "Lait"}}
+        self.user_list_settings = {"u1": {"listArticleLanguage": locale}}
+        self.reloads = 0
+        self.lists = [("Courses", "u1")]
         self._locale = locale
         self.fail_once = fail_once
         self.calls = 0
@@ -46,16 +49,24 @@ class FakeBring:
     def _Bring__locale(self, list_uuid):
         return self._locale
 
+    def _Bring__translate(self, item_id, *, to_locale):
+        return item_id if to_locale == "de-CH" else self._Bring__translations[to_locale].get(item_id, item_id)
+
+    async def reload_user_list_settings(self):
+        self.reloads += 1
+        self.user_list_settings["u2"] = {"listArticleLanguage": self._locale}
+
+    async def reload_article_translations(self):
+        pass
+
     async def load_lists(self):
         self.calls += 1
         if self.fail_once:
             self.fail_once = False
             raise BringAuthException("expired")
 
-        class L:
-            name, listUuid = "Courses", "u1"
-
-        return type("R", (), {"lists": [L()]})()
+        lists = [type("L", (), {"name": name, "listUuid": uuid})() for name, uuid in self.lists]
+        return type("R", (), {"lists": lists})()
 
 
 def _client_with(*fakes):
@@ -120,3 +131,33 @@ def test_from_env_requires_credentials(monkeypatch):
     monkeypatch.delenv("BRING_PASSWORD", raising=False)
     with pytest.raises(SystemExit):
         BringClient.from_env()
+
+
+def test_catalog_name_translates_other_languages():
+    client = _client_with(FakeBring())
+    assert asyncio.run(client.catalog_name("u1", "Milk")) == "Lait"
+    assert asyncio.run(client.catalog_name("u1", "eggs")) == "Oeufs"
+    assert asyncio.run(client.catalog_name("u1", "Lait")) == "Lait"
+
+
+def test_catalog_name_does_not_return_keys_for_unknown_list_language():
+    client = _client_with(FakeBring(locale="xx-XX"))
+    assert asyncio.run(client.catalog_name("u1", "Milk")) == "Milk"
+
+
+def test_lookup_matches_an_item_named_in_another_language():
+    client = _client_with(FakeBring())
+    items = [Item("1", "Lait", "1 L"), Item("2", "Oeufs", "")]
+    assert asyncio.run(client.lookup("u1", items, "milk")).uuid == "1"
+    assert asyncio.run(client.lookup("u1", items, "Oeuf")).uuid == "2"
+    assert asyncio.run(client.lookup("u1", items, "Butter")) is None
+
+
+def test_list_created_after_login_reloads_settings_once():
+    fake = FakeBring()
+    fake.lists.append(("Demo", "u2"))
+    client = _client_with(fake)
+    assert asyncio.run(client.resolve_list("Demo")) == ("u2", "Demo")
+    assert asyncio.run(client.resolve_list("demo")) == ("u2", "Demo")
+    assert asyncio.run(client.resolve_list("Courses")) == ("u1", "Courses")
+    assert fake.reloads == 1

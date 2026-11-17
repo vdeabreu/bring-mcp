@@ -13,7 +13,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import AfterValidator, BaseModel, Field
 
-from .bring_client import BringClient, find, merge_spec
+from .bring_client import BringClient, merge_spec
 from .staples import add_missing_staples, get_staples, set_staples
 from .store import Store
 
@@ -108,7 +108,7 @@ def register(mcp: MCPServer, client: BringClient, store: Store, log_calls: bool 
         to_buy, _ = await client.items(uuid)
         changes, added, merged = [], [], []
         for item in items:
-            existing = find(to_buy, item.name)
+            existing = await client.lookup(uuid, to_buy, item.name)
             if existing:
                 spec = merge_spec(existing.spec, item.spec)
                 changes.append({"itemId": existing.name, "spec": spec, "uuid": existing.uuid})
@@ -125,7 +125,7 @@ def register(mcp: MCPServer, client: BringClient, store: Store, log_calls: bool 
         """Replace the specification (quantity/detail) of an item on the list."""
         uuid, list_name = await client.resolve_list(list)
         to_buy, _ = await client.items(uuid)
-        existing = find(to_buy, name)
+        existing = await client.lookup(uuid, to_buy, name)
         if not existing:
             raise ValueError(f"\"{name}\" is not on the list {list_name}")
         change = {"itemId": existing.name, "spec": spec, "uuid": existing.uuid}
@@ -138,7 +138,7 @@ def register(mcp: MCPServer, client: BringClient, store: Store, log_calls: bool 
         pool = to_buy if operation == BringItemOperation.COMPLETE else to_buy + recent
         changes, done, not_found = [], [], []
         for n in names:
-            existing = find(pool, n)
+            existing = await client.lookup(uuid, pool, n)
             if existing:
                 changes.append({"itemId": existing.name, "spec": existing.spec, "uuid": existing.uuid})
                 done.append(existing.name)

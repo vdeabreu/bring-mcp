@@ -12,6 +12,7 @@ import re
 import unicodedata
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from functools import cache
 from importlib import resources
 from typing import TypeVar
 
@@ -38,6 +39,7 @@ class BringClient:
         self._bring: Bring | None = None
         self._session: aiohttp.ClientSession | None = None
         self._catalogs: dict[str, dict[str, str]] = {}
+        self._settings_checked: set[str] = set()
         self._lock = asyncio.Lock()
 
     @classmethod
@@ -66,6 +68,7 @@ class BringClient:
                 await self._session.close()
             self._bring = self._session = None
             self._catalogs.clear()
+            self._settings_checked.clear()
 
     async def _call(self, op: Callable[[Bring], Awaitable[T]]) -> T:
         """Run `op`; if Bring rejects an existing session (refresh token expired), log in again once.
@@ -90,11 +93,26 @@ class BringClient:
             raise ValueError("This Bring! account has no shopping list")
         wanted = name_or_uuid or self.default_list
         if not wanted:
+            await self._ensure_list_settings(lists[0]["uuid"])
             return lists[0]["uuid"], lists[0]["name"]
         for lst in lists:
             if wanted == lst["uuid"] or lst["name"].casefold() == wanted.casefold():
+                await self._ensure_list_settings(lst["uuid"])
                 return lst["uuid"], lst["name"]
         raise ValueError(f"Unknown list: {wanted}. Available lists: {', '.join(lst['name'] for lst in lists)}")
+
+    async def _ensure_list_settings(self, list_uuid: str) -> None:
+        """bring-api reads list settings once, at login. A list created since then has none, so
+        its items would be translated with the account language instead of the list's. Reload
+        the settings and translations the first time such a list is used."""
+        if list_uuid in self._settings_checked:
+            return
+        bring = await self.bring()
+        if list_uuid not in bring.user_list_settings:
+            await self._call(lambda b: b.reload_user_list_settings())
+            await self._call(lambda b: b.reload_article_translations())
+            self._catalogs.clear()
+        self._settings_checked.add(list_uuid)
 
     async def items(self, list_uuid: str) -> tuple[list[Item], list[Item]]:
         """(to buy, recently bought). Names are in the list's language."""
@@ -124,8 +142,23 @@ class BringClient:
 
     async def catalog_name(self, list_uuid: str, name: str) -> str:
         """Catalog spelling of `name` in the list's language ("œuf" -> "Oeufs"), so
-        Bring files it under the right section with its icon; unknown names pass through."""
+        Bring files it under the right section with its icon. A catalog name in another
+        language is translated ("Milk" -> "Lait" on a French list); unknown names pass through."""
         bring = await self.bring()
+        local = self._local_catalog(bring, list_uuid)
+        if hit := local.get(normalize(name)):
+            return hit
+        key = _catalog_keys_any_language().get(normalize(name))
+        locale = bring._Bring__locale(list_uuid)
+        if key and (locale == BRING_DEFAULT_LOCALE or locale in bring._Bring__translations):
+            return self._to_list_language(bring, list_uuid, key)
+        return name.strip()
+
+    async def lookup(self, list_uuid: str, items: list[Item], name: str) -> Item | None:
+        """The item of `items` that `name` designates, by name or by catalog entry."""
+        return find(items, name) or find(items, await self.catalog_name(list_uuid, name))
+
+    def _local_catalog(self, bring: Bring, list_uuid: str) -> dict[str, str]:
         locale = bring._Bring__locale(list_uuid)
         if locale not in self._catalogs:
             translations: dict[str, dict[str, str]] = bring._Bring__translations
@@ -137,7 +170,7 @@ class BringClient:
             else:
                 names = []
             self._catalogs[locale] = {normalize(v): v for v in names}
-        return self._catalogs[locale].get(normalize(name), name.strip())
+        return self._catalogs[locale]
 
     @staticmethod
     def _to_list_language(bring: Bring, list_uuid: str, item_id: str) -> str:
@@ -155,6 +188,29 @@ def _bundled_catalog_keys() -> list[str]:
         return list(json.loads(path.read_text(encoding="utf-8")))
     except (OSError, ValueError):
         return []
+
+
+@cache
+def _catalog_keys_any_language() -> dict[str, str]:
+    """Normalized catalog name in any language bring-api ships -> catalog key.
+
+    English tables come first, then the others alphabetically: when two languages use the
+    same word for different items, the first one wins."""
+    folder = resources.files("bring_api") / "locales"
+    files = sorted(
+        (f for f in folder.iterdir() if f.name.startswith("articles.") and f.name.endswith(".json")),
+        key=lambda f: (not f.name.startswith("articles.en-"), f.name),
+    )
+    index: dict[str, str] = {}
+    for f in files:
+        try:
+            table = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        for key, value in table.items():
+            index.setdefault(normalize(key), key)
+            index.setdefault(normalize(value), key)
+    return index
 
 
 def normalize(name: str) -> str:

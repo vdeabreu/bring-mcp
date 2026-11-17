@@ -13,7 +13,7 @@ from bring_mcp.bring_client import BringClient, Item, normalize
 from bring_mcp.staples import set_staples
 from bring_mcp.store import Store
 
-CATALOG = {"tomate": "Tomates", "oeuf": "Oeufs", "lait": "Lait"}
+CATALOG = {"tomate": "Tomates", "oeuf": "Oeufs", "lait": "Lait", "milk": "Lait"}
 
 
 class FakeClient(BringClient):
@@ -35,6 +35,9 @@ class FakeClient(BringClient):
 
     async def catalog_name(self, list_uuid, name):
         return CATALOG.get(normalize(name), name.strip())
+
+    async def _ensure_list_settings(self, list_uuid):
+        pass
 
 
 @pytest.fixture
@@ -62,6 +65,12 @@ def test_add_items_merges_and_uses_catalog_names(env):
     assert op == BringItemOperation.ADD
     assert {"itemId": "Tomates", "spec": "6", "uuid": None} in changes
     assert {"itemId": "Lait", "spec": "1 L + 2 L", "uuid": "i1"} in changes
+
+
+def test_add_items_merges_an_item_named_in_another_language(env):
+    client, _, call = env
+    out = call("add_items", items=[{"name": "Milk", "spec": "300ml"}])
+    assert out == {"list": "Courses", "added": [], "merged": ["Lait (1 L + 300ml)"]}
 
 
 def test_list_is_chosen_by_name_case_insensitively(env):

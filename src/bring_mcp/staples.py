@@ -8,7 +8,7 @@ import asyncio
 
 from bring_api import BringItemOperation
 
-from .bring_client import BringClient, find
+from .bring_client import BringClient
 from .store import Store, db_path
 
 
@@ -25,7 +25,7 @@ async def add_missing_staples(client: BringClient, store: Store, list_name: str 
     to_buy, _ = await client.items(list_uuid)
     changes = []
     for staple in get_staples(store):
-        if find(to_buy, staple["name"]):
+        if await client.lookup(list_uuid, to_buy, staple["name"]):
             continue
         item_id = await client.catalog_name(list_uuid, staple["name"])
         changes.append({"itemId": item_id, "spec": staple.get("spec", ""), "uuid": None})
